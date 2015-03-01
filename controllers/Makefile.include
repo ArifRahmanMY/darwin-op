@@ -1,0 +1,57 @@
+###############################################################
+#
+# Purpose:            Makefile for compiling a controller using the Webots
+#                     API on the darwin-op real robot
+# Author :            fabien.rohrer@cyberbotics.com
+# License:            GPL
+# Date   :            September 2013
+#
+###############################################################
+
+
+# name of the binary to generate
+TARGET = $(shell basename $(CURDIR))
+
+# pathes
+DARWINOP_ROOT = /darwin
+WEBOTS_DARWINOP_PROJECT_ROOT = /darwin/Linux/project/webots
+
+# source filenames
+CXX_SOURCES = $(wildcard *.cpp)
+
+INCLUDE_DIRS = -I$(DARWINOP_ROOT)/Linux/include -I$(DARWINOP_ROOT)/Framework/include -I$(WEBOTS_DARWINOP_PROJECT_ROOT)/transfer/include -I$(WEBOTS_DARWINOP_PROJECT_ROOT)/include
+CXX = g++
+CXXFLAGS += -O2 -DLINUX -DCROSSCOMPILATION -Wall $(INCLUDE_DIRS)
+LFLAGS += -lpthread -ljpeg -lrt
+WRAPPER = $(WEBOTS_DARWINOP_PROJECT_ROOT)/transfer/lib/wrapper.a $(WEBOTS_DARWINOP_PROJECT_ROOT)/transfer/keyboard/keyboard.a
+DARWINOP_STATIC_LIBRARY = $(DARWINOP_ROOT)/Linux/lib/darwin.a
+MANAGERS_STATIC_LIBRARY = $(WEBOTS_DARWINOP_PROJECT_ROOT)/lib/managers.a
+OBJECTS = $(CXX_SOURCES:.cpp=.o)
+# X11 is needed to handle the keyboard input
+LIBX11 = libX11.so
+# To avoid installing the libX11-dev package, we can simply create a soft link
+# to libX11.so.6. This library however is located in /usr/lib/ on ubuntu <=10
+# and in /usr/lib/i386-linux-gnu/ on ubuntu >=12
+ifneq ($(wildcard /usr/lib/libX11.so.6),)
+LIBX11_SOURCE = /usr/lib/libX11.so.6
+else ifneq ($(wildcard /usr/lib/i386-linux-gnu/libX11.so.6),)
+LIBX11_SOURCE = /usr/lib/i386-linux-gnu/libX11.so.6
+endif
+
+all: $(TARGET)
+
+clean:
+	rm -f $(OBJECTS) $(TARGET) $(LIBX11)
+
+$(WRAPPER):
+	make -C $(WEBOTS_DARWINOP_PROJECT_ROOT)/transfer/lib
+
+$(DARWINOP_STATIC_LIBRARY):
+	make -C $(DARWINOP_ROOT)/Linux/build
+
+$(LIBX11):
+	ln -s $(LIBX11_SOURCE) $@
+
+$(TARGET): $(WRAPPER) $(OBJECTS) $(DARWINOP_STATIC_LIBRARY) $(LIBX11)
+	$(CXX) $(CFLAGS) $(OBJECTS) $(WRAPPER) $(DARWINOP_STATIC_LIBRARY) $(MANAGERS_STATIC_LIBRARY) $(LFLAGS) -L. -lX11 -o $(TARGET)
+	chmod 755 $(TARGET)
